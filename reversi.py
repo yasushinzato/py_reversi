@@ -28,8 +28,8 @@ class Position:
         self.x = 0
         
     def __init__(self, y, x):
-        self.x = x
         self.y = y
+        self.x = x
 
 # -----------------------------
 # 盤面クラス
@@ -42,8 +42,7 @@ class Board:
     
     def __init__(self):
         # 盤面。８×８の２次元リストを生成
-        self.board = \
-          [[SPACE for i in range(8)] for j in range(8)]
+        self.board = [[SPACE for i in range(8)] for j in range(8)]
         self.turn = BLACK  # 手番
         self.move_num = 1  # 手数
         
@@ -83,12 +82,17 @@ class Board:
         for dir in Board.DIR:
             y = position.y + dir[0]
             x = position.x + dir[1]
-            while y >= 0 and x >= 0 and y < 8 and x < 8 and self.board[y][x] == -self.turn:
+            if y >= 0 and x >= 0 and y < 8 and x < 8 and self.board[y][x] == -self.turn:
+            # while y >= 0 and x >= 0 and y < 8 and x < 8 and self.board[y][x] == -self.turn:
                 # 隣が相手の石
                 y += dir[0]
                 x += dir[1]
-            if y >= 0 and x >= 0 and y < 8 and x < 8 and self.board[y][x] == self.turn:
-                return True
+                # 2020/01/05 whileの実装漏れ
+                while y >= 0 and x >= 0 and y < 8 and x < 8 and self.board[y][x] == -self.turn:
+                    y += dir[0]
+                    x += dir[1]
+                if y >= 0 and x >= 0 and y < 8 and x < 8 and self.board[y][x] == self.turn:
+                    return True
             
         return False
     
@@ -98,7 +102,7 @@ class Board:
         for y in range(8):
             for x in range(8):
                 if self.board[y][x] == SPACE:
-                    position = Position(x, y)
+                    position = Position(y, x)
                     if self.is_movable(position):
                         move_list.append(position)
         return move_list
@@ -117,10 +121,21 @@ class Board:
                 # 隣が相手の石
                 y += dir[0]
                 x += dir[1]
-            while y >= 0 and x >= 0 and y < 8 and x < 8 and self.board[y][x] == self.turn:
-                self.board[y][x] = self.turn
-                y -= dir[0]
-                x -= dir[1]
+                # 2020/01/05 タブの位置誤り修正  2020/02/23 -self.turnに修正
+                while y >= 0 and x >= 0 and y < 8 and x < 8 and self.board[y][x] == -self.turn:
+                    # self.board[y][x] = self.turn　連続してヒックリ返せなかった。バグ
+                    y += dir[0]
+                    x += dir[1]
+                if y >= 0 and x >= 0 and y < 8 and x < 8 and self.board[y][x] == self.turn:
+                    # この方向は返せる
+                    # 1マス戻る
+                    y -= dir[0]
+                    x -= dir[1]
+                    # 戻りながら返す
+                    while y >= 0 and x >= 0 and y < 8 and x < 8 and self.board[y][x] == -self.turn:
+                        self.board[y][x] = self.turn
+                        y -= dir[0]
+                        x -= dir[1]
                 
         self.turn = -self.turn  # 手番を変更
         self.move_num += 1      # 手数を増やす
@@ -196,10 +211,8 @@ class Game:
         
     # 次の手番はコンピュータか？
     def is_com_turn(self):
-        if self.board.turn == BLACK and \
-          self.black_player == 1 or \
-          self.board.turn == WHITE and \
-          self.white_player == 1:
+        if self.board.turn == BLACK and self.black_player == 1 or \
+           self.board.turn == WHITE and self.white_player == 1:
               return True
         return False
      
@@ -365,9 +378,9 @@ black_rdo1.place(x = 160, y = 4)
 white_label = tkinter.Label(text=u"後手○")
 white_label.place(x = 16, y = 24)
 white_var = tkinter.IntVar()
-white_rdo0 = tkinter.Radiobutton(root, value = 1, variable = white_var, text = u"プレイヤー")  # 初期はCPU
+white_rdo0 = tkinter.Radiobutton(root, value = 0, variable = white_var, text = u"プレイヤー")  # 初期はCPU
 white_rdo0.place(x = 70, y = 24)
-white_rdo1 = tkinter.Radiobutton(root, value = 0, variable = white_var, text = u"コンピュータ")
+white_rdo1 = tkinter.Radiobutton(root, value = 1, variable = white_var, text = u"コンピュータ")
 white_rdo1.place(x = 160, y = 24)
 
 

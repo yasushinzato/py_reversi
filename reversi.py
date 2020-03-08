@@ -233,7 +233,7 @@ class Game:
 class AI:
     # 与えられた盤面から指し手を返す
     def select_move(self, board):
-        time_sleep(1)   # １秒待つ
+        time.sleep(1)   # １秒待つ
         move_list = board.get_move_list()
         # ランダムに指し手を選ぶ
         r = random.randint(0, len(move_list) - 1)

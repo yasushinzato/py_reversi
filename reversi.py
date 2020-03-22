@@ -3,6 +3,7 @@ import random
 import time
 import math
 import tkinter
+import copy # ディープコピーを利用。参照コピーはしないため。
 from tkinter import messagebox
 
 # =============================
@@ -18,6 +19,8 @@ WHITE = -1 # 白石
 
 BOARD_PX_SIZE = 500 # 盤面のサイズ
 CELL_PX_SIZE = BOARD_PX_SIZE / 8 # マスのサイズ
+
+AI_LEVEL = 3 # AIが読む深さ
 
 # -----------------------------
 # マスの座標を管理するクラス
@@ -167,6 +170,56 @@ class Board:
             
         return False
     
+    # 局面を評価する評価関数
+    # 黒が有利ならプラス、白が有利ならマイナス
+    # 観点１　最終局面の場合、石が多い方が勝ち
+    # 観点２　隅をとっているほうが有利
+    # 観点３　打てるマスの数が多いほうが有利
+    # 評価値　＝　w1 ×（黒の角の数　－　白の角の数）　＋　w２　×（黒の打てる数　－　白の打てる数）　　w１の隅の数の評価は高めなので重みに１６を設定。w２は重みに２を設定。
+    def evaluation(self):
+        eval_val = 0  # 評価値の変数
+        
+        # 終了局面の場合：黒石の数　－　白石の数を返す
+        # 60手に満たない場合、途中局面と終了局面の評価値が混在するため1000を設定
+        if self.is_game_end():
+            (black_discs, white_discs) = self.get_discs()
+            eval_val = black_discs - white_discs
+            if eval_val > 0:
+                eval_val += 1000
+            elif eval_val < 0:
+                eval_val -= 1000
+            return eval_val
+        
+        # 途中局面の場合、黒白の隅の数を数える
+        corner = 0
+        for (y, x) in [(0, 0), (0, 7), (7, 0), (7, 7)]:
+            if self.board[y][x] == BLACK:
+                corner += 1
+            elif self.board[y][x] == WHITE:
+                corner -= 1
+        # 重みを掛けて評価値に加算。重みは16を設定
+        eval_val += corner * 16 
+        
+        # 手番の打てるマスの数を数える
+        move_num = 0
+        move_list = self.get_move_list()
+        if self.turn == BLACK:
+            move_num += len(move_list)
+        else:
+            move_num -= len(move_list)
+        # 相手の打てるマスの数を数える
+        self.move_pass()
+        move_list = self.get_move_list()
+        if self.turn == BLACK:
+            move_num += len(move_list)
+        else:
+            move_num -= len(move_list)
+        self.move_pass()
+        # 重みを掛けて評価値に加算。重みは2を設定
+        eval_val += move_num * 2
+        
+        return eval_val
+    
 # -----------------------------
 # ゲームクラス
 # -----------------------------
@@ -228,16 +281,79 @@ class Game:
                 break
 
 # -----------------------------
-# AIクラス
+# AIクラス　（ミニマックス法）ゲーム木をしらみつぶしに探索するアルゴリズム
 # -----------------------------                    
 class AI:
     # 与えられた盤面から指し手を返す
     def select_move(self, board):
-        time.sleep(1)   # １秒待つ
+        # 全ての指し手を生成
         move_list = board.get_move_list()
-        # ランダムに指し手を選ぶ
-        r = random.randint(0, len(move_list) - 1)
-        return move_list[r]
+        # 評価値が同じ場合、同じ手になりにくくするためシャッフルする
+        random.shuffle(move_list)
+        
+        ai_level = AI_LEVEL # 読みの深さ
+        
+        if board.turn == BLACK:
+            # 黒の手番：すごく低い評価値からスタートし、高い評価値が見つかったら値をセット
+            best_eval = -10000
+        else:
+            # 白の手番：すごく高い評価値からスタートし、低い評価値が見つかったら値をセット
+            best_eval = 10000
+        
+        for position in move_list:
+            tmp_board = copy.deepcopy(board)
+            tmp_board.move(position) # 局面を進める
+            # 局面を評価
+            eval = self.minmax(tmp_board, ai_level-1)
+            if board.turn == BLACK:
+                if eval > best_eval:
+                    # 黒の手番：評価値がより高い手の場合は最善手を入れ替える
+                    best_eval = eval
+                    best_position = position
+            else:
+                if eval < best_eval:
+                    # 白の手番：評価値がより低い手の場合は最善手を入れ替える
+                    best_eval = eval
+                    best_position = position
+        print(str(board.move_num) + "手 best_eval: " + str(best_eval))
+        return best_position
+    
+    def minmax(self, board, depth):
+        # 引数で指定された深さまで読んだか。終局となった場合は、局面評価値を返す
+        if depth <= 0 or board.is_game_end():
+            return board.evaluation()
+        
+        # すべての指し手を生成
+        move_list = board.get_move_list()
+        
+        if len(move_list) == 0:
+            # 打てる場所がないのでパス
+            tmp_board = copy.deepcopy(board)
+            tmp_board.move_pass()
+            # 再帰呼び出し
+            return self.minmax(tmp_board, depth)
+        
+        if board.turn == BLACK:
+            # 黒の手番：すごく低い評価地からスタート
+            best_eval = -10000
+        else:
+            # 白の手番：すごく高い評価地からスタート
+            best_eval = 10000
+        for position in move_list:
+            tmp_board = copy.deepcopy(board)
+            tmp_board.move(position)
+            # 再帰呼び出し
+            eval = self.minmax(tmp_board, depth - 1)
+            if board.turn == BLACK:
+                # 黒の手番：評価値がより高い手
+                if eval > best_eval:
+                    best_eval = eval
+            else:
+                # 白の手番；評価値がより低い手
+                if eval < best_eval:
+                    best_eval = eval
+                    
+        return best_eval
 
 # -----------------------------
 # UI関数
